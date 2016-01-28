@@ -51,7 +51,7 @@ func init() {
 		}
 
 		if localFile == "" {
-			localFile = remoteFile[:len(filepath.Base(remoteFile))]
+			_, localFile = filepath.Split(remoteFile)
 		}
 	}
 }
