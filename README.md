@@ -18,4 +18,8 @@ Usage of ./rover:
   -v	verbose
 ```
 
+e.g.
 
+```shell
+./rover -u `curl https://api.ipsw.me/v2.1/iPhone5,1/latest/url` -r Restore.plist -o -
+```
