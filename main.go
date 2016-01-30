@@ -25,7 +25,10 @@ var (
 	timeout    int
 	verbose    bool
 	showFiles  bool
+	limitBytes uint64
 )
+
+const defaultBufferSize = 128 * 1024
 
 func init() {
 	flag.StringVar(&sourceURL, "u", "", "the url you wish to download from")
@@ -34,6 +37,7 @@ func init() {
 	flag.IntVar(&timeout, "t", 5, "timeout, in seconds")
 	flag.BoolVar(&verbose, "v", false, "verbose")
 	flag.BoolVar(&showFiles, "l", false, "list files in zip")
+	flag.Uint64Var(&limitBytes, "b", 0, "limit filesize downloaded (in bytes)")
 
 	flag.Parse()
 
@@ -94,6 +98,14 @@ func progressBar(progress int) (progressBar string) {
 	return progressBar
 }
 
+func getBufferSize(lim uint64) uint64 {
+	if lim < defaultBufferSize {
+		return lim
+	}
+
+	return defaultBufferSize
+}
+
 func downloadFile(file *zip.File, writer *os.File) error {
 	errCh := make(chan error)
 
@@ -107,20 +119,47 @@ func downloadFile(file *zip.File, writer *os.File) error {
 
 		defer rc.Close()
 
-		buf := make([]byte, 128*1024)
-
 		downloaded := uint64(0)
-		filesize := file.UncompressedSize64
+
+		var filesize uint64
+		var buf []byte
+
+		if limitBytes != 0 {
+			filesize = limitBytes
+			buf = make([]byte, getBufferSize(limitBytes))
+		} else {
+			filesize = file.UncompressedSize64
+			buf = make([]byte, defaultBufferSize)
+		}
+
 		humanizedFilesize := humanize.Bytes(filesize)
 
 		for {
+
+			// adjust the size of the buffer to get the exact
+			// number of bytes we want to download
+			if downloaded+defaultBufferSize > filesize {
+				buf = make([]byte, filesize-downloaded)
+			}
+
 			if n, _ := io.ReadFull(rc, buf); n > 0 {
+
 				writer.Write(buf[:n])
 				downloaded += uint64(n)
 
 				if verbose {
-					fmt.Printf("\r%s %10s/%-10s", progressBar(int(downloaded*100/filesize)), humanize.Bytes(downloaded), humanizedFilesize)
+					fmt.Printf(
+						"\r%s %10s/%-10s",
+						progressBar(int(downloaded*100/filesize)),
+						humanize.Bytes(downloaded),
+						humanizedFilesize,
+					)
 				}
+
+				if limitBytes != 0 && downloaded >= limitBytes {
+					break
+				}
+
 			} else {
 				break
 			}
@@ -156,7 +195,7 @@ func listFiles(reader *zip.Reader) error {
 	}
 
 	for _, f := range reader.File {
-		fmt.Println(f.Name)
+		fmt.Printf("%6s \t %s\n", humanize.Bytes(f.UncompressedSize64), f.Name)
 	}
 
 	return nil

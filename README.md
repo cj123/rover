@@ -6,6 +6,8 @@ a cmd line util for [ranger](http://github.com/DHowett/ranger)
 
 ```
 Usage of ./rover:
+  -b uint
+    	limit filesize downloaded (in bytes)
   -l	list files in zip
   -o string
     	the output filename
