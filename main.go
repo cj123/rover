@@ -19,13 +19,13 @@ import (
 )
 
 var (
-	sourceURL  string
-	remoteFile string
-	localFile  string
-	timeout    int
-	verbose    bool
-	showFiles  bool
-	limitBytes uint64
+	sourceURL  string // download URL
+	remoteFile string // remote file name
+	localFile  string // local file name
+	timeout    int    // timeout
+	verbose    bool   // verbose mode shows a progress bar
+	showFiles  bool   // list the files in the zip then exit
+	limitBytes uint64 // limit the download to this many bytes
 )
 
 const defaultBufferSize = 128 * 1024
@@ -93,7 +93,7 @@ func progressBar(progress int) (progressBar string) {
 	}
 
 	// end the progressbar
-	progressBar = progressBar + "] " + fmt.Sprintf("%3d", progress) + "%"
+	progressBar = progressBar + "] " + fmt.Sprintf("%3d%%", progress)
 
 	return progressBar
 }
@@ -219,7 +219,6 @@ func main() {
 	}
 
 	zipreader, err := zip.NewReader(reader, reader.Length())
-
 	if err != nil {
 		fmt.Printf("Unable to create zip reader for url: %s\n", downloadURL)
 		os.Exit(1)
