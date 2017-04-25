@@ -194,9 +194,15 @@ func listFiles(reader *zip.Reader) error {
 		return errors.New("file read error")
 	}
 
+	var total uint64
+
 	for _, f := range reader.File {
+		total += f.UncompressedSize64
 		fmt.Printf("%6s \t %s\n", humanize.Bytes(f.UncompressedSize64), f.Name)
 	}
+
+	fmt.Println("------")
+	fmt.Printf("%6s\n", humanize.Bytes(total))
 
 	return nil
 }
