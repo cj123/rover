@@ -13,7 +13,7 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/cj123/ranger"
+	"github.com/DHowett/ranger"
 	"github.com/dustin/go-humanize"
 	"golang.org/x/crypto/ssh/terminal"
 )
@@ -107,72 +107,65 @@ func getBufferSize(lim uint64) uint64 {
 }
 
 func downloadFile(file *zip.File, writer *os.File) error {
-	errCh := make(chan error)
+	rc, err := file.Open()
 
-	go func() {
-		rc, err := file.Open()
+	if err != nil {
+		return err
+	}
 
-		if err != nil {
-			errCh <- err
-			return
+	defer rc.Close()
+
+	downloaded := uint64(0)
+
+	var filesize uint64
+	var buf []byte
+
+	if limitBytes != 0 {
+		filesize = limitBytes
+		buf = make([]byte, getBufferSize(limitBytes))
+	} else {
+		filesize = file.UncompressedSize64
+		buf = make([]byte, defaultBufferSize)
+	}
+
+	humanizedFilesize := humanize.Bytes(filesize)
+
+	for {
+		// adjust the size of the buffer to get the exact
+		// number of bytes we want to download
+		if downloaded+defaultBufferSize > filesize {
+			buf = make([]byte, filesize-downloaded)
 		}
 
-		defer rc.Close()
+		if n, err := io.ReadFull(rc, buf); n > 0 && err == nil || err == io.EOF {
+			writer.Write(buf[:n])
+			downloaded += uint64(n)
 
-		downloaded := uint64(0)
-
-		var filesize uint64
-		var buf []byte
-
-		if limitBytes != 0 {
-			filesize = limitBytes
-			buf = make([]byte, getBufferSize(limitBytes))
-		} else {
-			filesize = file.UncompressedSize64
-			buf = make([]byte, defaultBufferSize)
-		}
-
-		humanizedFilesize := humanize.Bytes(filesize)
-
-		for {
-
-			// adjust the size of the buffer to get the exact
-			// number of bytes we want to download
-			if downloaded+defaultBufferSize > filesize {
-				buf = make([]byte, filesize-downloaded)
+			if verbose {
+				fmt.Printf(
+					"\r%s %10s/%-10s",
+					progressBar(int(downloaded*100/filesize)),
+					humanize.Bytes(downloaded),
+					humanizedFilesize,
+				)
 			}
 
-			if n, _ := io.ReadFull(rc, buf); n > 0 {
-
-				writer.Write(buf[:n])
-				downloaded += uint64(n)
-
-				if verbose {
-					fmt.Printf(
-						"\r%s %10s/%-10s",
-						progressBar(int(downloaded*100/filesize)),
-						humanize.Bytes(downloaded),
-						humanizedFilesize,
-					)
-				}
-
-				if limitBytes != 0 && downloaded >= limitBytes {
-					break
-				}
-
-			} else {
+			if limitBytes != 0 && downloaded >= limitBytes {
 				break
 			}
+
+		} else if err != nil {
+			return err
+		} else {
+			break
 		}
+	}
 
-		if verbose {
-			fmt.Println()
-		}
+	if verbose {
+		fmt.Println()
+	}
 
-		errCh <- nil
-	}()
-
-	return <-errCh
+	return err
 }
 
 func findFile(reader *zip.Reader, filename string) (*zip.File, error) {
@@ -186,7 +179,7 @@ func findFile(reader *zip.Reader, filename string) (*zip.File, error) {
 		}
 	}
 
-	return nil, errors.New("Unable to find file")
+	return nil, errors.New("unable to find file")
 }
 
 func listFiles(reader *zip.Reader) error {
@@ -224,14 +217,21 @@ func main() {
 		os.Exit(1)
 	}
 
-	zipreader, err := zip.NewReader(reader, reader.Length())
+	readerLen, err := reader.Length()
+
+	if err != nil {
+		fmt.Println("Unable to get reader length")
+		os.Exit(1)
+	}
+
+	zipReader, err := zip.NewReader(reader, readerLen)
 	if err != nil {
 		fmt.Printf("Unable to create zip reader for url: %s\n", downloadURL)
 		os.Exit(1)
 	}
 
 	if showFiles {
-		listFiles(zipreader)
+		listFiles(zipReader)
 		return
 	}
 
@@ -250,7 +250,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	foundFile, err := findFile(zipreader, remoteFile)
+	foundFile, err := findFile(zipReader, remoteFile)
 
 	if err != nil {
 		fmt.Printf("Unable find file: %s in zip.", remoteFile)
