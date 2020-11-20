@@ -13,7 +13,7 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/DHowett/ranger"
+	"howett.net/ranger"
 	"github.com/dustin/go-humanize"
 	"golang.org/x/crypto/ssh/terminal"
 )
